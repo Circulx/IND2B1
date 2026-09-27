@@ -4,7 +4,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { env, mediaProvider } from "../env";
 
-
+/**
+ * Where image files live.
+ *   cloudinary — when CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET are set (recommended for production:
+ *                global CDN, automatic WebP/AVIF per browser, on-the-fly resizing).
+ *   local      — files in UPLOAD_DIR (default ./.uploads), served by /media/... Good for development
+ *                or a single server with a persistent disk.
+ * The API secret never leaves the server: uploads are signed here and sent from here.
+ */
 
 export type Stored = { provider: "cloudinary" | "local"; key: string; url: string };
 const KEY_RE = /^[a-z0-9_-]{1,64}\/[a-z0-9]{24}\.webp$/;
