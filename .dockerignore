@@ -1,0 +1,6 @@
+node_modules
+.next
+.mongo-data
+.env
+.env.local
+*.tsbuildinfo

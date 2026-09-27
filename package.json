@@ -1,0 +1,44 @@
+{
+  "name": "ind2b",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IND2B — store builder for Indian businesses. Platform site, merchant dashboard, admin and storefronts in one Next.js app on MongoDB.",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:next": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "db:reset": "node scripts/reset-db.mjs"
+  },
+  "dependencies": {
+    "@fontsource/archivo": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.2.0",
+    "@fontsource/ibm-plex-sans": "^5.2.0",
+    "@fontsource/noto-sans-devanagari": "^5.2.0",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.12",
+    "lucide-react": "^1.48.0",
+    "mongoose": "^9.10.2",
+    "next": "16.3.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "mongodb-memory-server": "^11.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,47 @@
+# Platform + MongoDB with authentication.
+#   cp .env.example .env    # set SESSION_SECRET, MONGO_ROOT_PASSWORD, MONGO_APP_PASSWORD (and Cloudinary if used)
+#   docker compose up --build
+# Open http://localhost:3000. MongoDB is not published to the host; only the app can reach it.
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ind2b
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "root", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      retries: 6
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      # The app connects as a least-privilege user (readWrite on "ind2b" only), created by scripts/mongo-init.js.
+      MONGODB_URI: mongodb://ind2b_app:${MONGO_APP_PASSWORD}@mongo:27017/?authSource=ind2b
+      MONGODB_DB: ind2b
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (32+ random characters)}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      SHOW_DEMO_ACCOUNTS: ${SHOW_DEMO_ACCOUNTS:-false}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      mongo: { condition: service_healthy }
+
+volumes:
+  mongo-data: {}
+  uploads: {}

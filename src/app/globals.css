@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #16202a;
+  --color-ink-2: #2b3640;
+  --color-muted: #56616c;
+  --color-ground: #f4f5f2;
+  --color-surface: #ffffff;
+  --color-subtle: #f7f8f5;
+  --color-line: #dde1da;
+  --color-line-soft: #eaede7;
+  --color-control: #c3c9c0;
+
+  --color-teal-50: #e2f0ee;
+  --color-teal-100: #f4faf9;
+  --color-teal-700: #0b5f5c;
+  --color-teal-800: #084845;
+  --color-saffron-50: #fbebd9;
+  --color-saffron-100: #fffcf8;
+  --color-saffron-500: #e07b22;
+  --color-saffron-700: #a84f0d;
+
+  --color-ok: #1a5e37;
+  --color-ok-50: #e3f1e8;
+  --color-warn: #7f4500;
+  --color-warn-50: #fbebd5;
+  --color-bad: #9b1c14;
+  --color-bad-50: #fbe3e1;
+  --color-info: #1b4f8f;
+  --color-info-50: #e1ebf7;
+  --color-neutral-50: #eceeea;
+  --color-neutral-700: #3d4852;
+
+  --color-admin: #16202a;
+  --color-admin-2: #23303c;
+  --color-admin-muted: #a9b3bc;
+
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "IBM Plex Sans", "Noto Sans Devanagari", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --radius-control: 6px;
+  --radius-card: 8px;
+}
+
+/* Layer 2 · storefront theme tokens. theme-svc writes these per tenant on the storefront root. */
+:root {
+  --brand-primary: #1d3557;
+  --brand-accent: #e07b22;
+  --brand-on-primary: #ffffff;
+  --brand-on-accent: #16202a;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-ground text-ink font-sans antialiased; }
+  h1, h2, h3, h4 { @apply font-display text-ink; text-wrap: balance; }
+  :focus-visible { outline: 2px solid var(--color-teal-700); outline-offset: 2px; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--color-teal-700); width: 18px; height: 18px; }
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
