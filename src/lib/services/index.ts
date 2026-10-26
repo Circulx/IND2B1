@@ -13,6 +13,8 @@ export { APPS, PLANS, TEMPLATES } from "../catalog";
 export { cartTotals, unitPrice } from "../pricing";
 export * from "./users";
 export * from "./sessions";
+export * from "./customers";
+export * from "./otp";
 
 /**
  * Data access for the whole app, on MongoDB (Mongoose).

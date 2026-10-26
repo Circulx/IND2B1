@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
   },
 
   poweredByHeader: false,
-  agentRules: false,
 
   output: process.env.BUILD_STANDALONE === "true" ? "standalone" : undefined,
   serverExternalPackages: ["mongoose", "mongodb", "bcryptjs", "sharp"],

@@ -3,9 +3,9 @@
 import { useActionState } from "react";
 import type { CheckoutState } from "@/actions/storefront";
 
-type Props = { action: (prev: CheckoutState, fd: FormData) => Promise<CheckoutState>; token: string; online: boolean; cod: boolean; states: string[]; totalLabel: string };
+type Props = { action: (prev: CheckoutState, fd: FormData) => Promise<CheckoutState>; token: string; online: boolean; cod: boolean; states: string[]; totalLabel: string; defaults?: Record<string, string> };
 
-export function CheckoutForm({ action, token, online, cod, states, totalLabel }: Props) {
+export function CheckoutForm({ action, token, online, cod, states, totalLabel, defaults = {} }: Props) {
   const [state, formAction, pending] = useActionState<CheckoutState, FormData>(action, {});
   const e = state.errors ?? {};
   const v = state.values ?? {};
@@ -13,7 +13,7 @@ export function CheckoutForm({ action, token, online, cod, states, totalLabel }:
   const field = (id: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">{label}</label>
-      <input id={id} name={id} defaultValue={v[id]} aria-invalid={!!e[id]} aria-describedby={e[id] ? `${id}-err` : undefined} className={input} {...props} />
+      <input id={id} name={id} defaultValue={v[id] ?? defaults[id]} aria-invalid={!!e[id]} aria-describedby={e[id] ? `${id}-err` : undefined} className={input} {...props} />
       {e[id] && <span id={`${id}-err`} className="text-xs text-bad">{e[id]}</span>}
     </div>
   );

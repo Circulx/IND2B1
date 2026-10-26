@@ -6,8 +6,8 @@ import { env, mediaProvider } from "../env";
 
 /**
  * Where image files live.
- *   cloudinary — when CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET are set (recommended for production:
- *                global CDN, automatic WebP/AVIF per browser, on-the-fly resizing).
+ *   cloudinary — when CLOUDINARY_URL (or CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET) is set. Required in production:
+ *                global CDN, automatic WebP/AVIF per browser, on-the-fly resizing.
  *   local      — files in UPLOAD_DIR (default ./.uploads), served by /media/... Good for development
  *                or a single server with a persistent disk.
  * The API secret never leaves the server: uploads are signed here and sent from here.
@@ -37,8 +37,12 @@ export async function storeImage(storeId: string, data: Buffer): Promise<Stored>
     for (const [k, v] of Object.entries(params)) form.append(k, v);
     form.append("api_key", e.CLOUDINARY_API_KEY!);
     form.append("signature", cloudinarySign(params));
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${e.CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: form });
-    if (!res.ok) throw new Error(`cloudinary_upload_failed:${res.status}`);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${e.CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error(`[cloudinary] upload failed (${res.status}): ${detail.slice(0, 300)}`);   // 401 = wrong key/secret, 400 = bad parameters
+      throw new Error(`cloudinary_upload_failed:${res.status}`);
+    }
     const json = (await res.json()) as { secure_url: string; public_id: string };
     // f_auto,q_auto: Cloudinary serves WebP/AVIF per browser at a sensible quality.
     return { provider: "cloudinary", key: json.public_id, url: json.secure_url.replace("/image/upload/", "/image/upload/f_auto,q_auto/") };
@@ -60,7 +64,7 @@ export async function removeImage(stored: { provider: "cloudinary" | "local"; ke
     for (const [k, v] of Object.entries(params)) form.append(k, v);
     form.append("api_key", e.CLOUDINARY_API_KEY!);
     form.append("signature", cloudinarySign(params));
-    await fetch(`https://api.cloudinary.com/v1_1/${e.CLOUDINARY_CLOUD_NAME}/image/destroy`, { method: "POST", body: form }).catch(() => {});
+    await fetch(`https://api.cloudinary.com/v1_1/${e.CLOUDINARY_CLOUD_NAME}/image/destroy`, { method: "POST", body: form, signal: AbortSignal.timeout(15_000) }).catch(() => {});
     return;
   }
   if (!isValidLocalKey(stored.key)) return;

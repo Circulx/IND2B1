@@ -1,7 +1,4 @@
-# Platform + MongoDB with authentication.
-#   cp .env.example .env    # set SESSION_SECRET, MONGO_ROOT_PASSWORD, MONGO_APP_PASSWORD (and Cloudinary if used)
-#   docker compose up --build
-# Open http://localhost:3000. MongoDB is not published to the host; only the app can reach it.
+
 services:
   mongo:
     image: mongo:8

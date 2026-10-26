@@ -20,7 +20,7 @@ export function ProfileForm({ name, phone }: { name: string; phone: string }) {
   );
 }
 
-export function PasswordForm() {
+export function PasswordForm({ strong = false }: { strong?: boolean } = {}) {
   const [state, action, pending] = useActionState<AccountState, FormData>(changePasswordAction, undefined);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state?.ok) ref.current?.reset(); }, [state]);
@@ -30,7 +30,7 @@ export function PasswordForm() {
       <form ref={ref} action={action} className="flex flex-col gap-4">
         <h2 className="font-semibold">Change password</h2>
         <Field label="Current password" htmlFor="cur" error={fe.current}><Input id="cur" name="current" type="password" autoComplete="current-password" required /></Field>
-        <Field label="New password" htmlFor="npw" error={fe.next} hint="At least 8 characters with letters and a number."><Input id="npw" name="next" type="password" autoComplete="new-password" required /></Field>
+        <Field label="New password" htmlFor="npw" error={fe.next} hint={strong ? "At least 12 characters with upper and lower case letters, a number and a symbol." : "At least 8 characters with letters and a number."}><Input id="npw" name="next" type="password" autoComplete="new-password" required /></Field>
         <Field label="Repeat new password" htmlFor="cpw" error={fe.confirm}><Input id="cpw" name="confirm" type="password" autoComplete="new-password" required /></Field>
         {state?.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
         {state?.ok && <p role="status" className="text-sm text-ok">{state.ok}</p>}

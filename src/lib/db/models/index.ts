@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Model } from "mongoose";
-import type { Discount, ImageRef, Order, Product, Store, Theme } from "../../types";
+import type { Discount, ImageRef, Order, Product, Role, Store, Theme } from "../../types";
 
 /**
  * MongoDB collections. Ids are readable strings (st_…, pr_…, ord_…) so they can
@@ -11,18 +11,29 @@ const opts = { versionKey: false } as const;
 // `mongoose.models.X ??` reuses the compiled model when Next.js hot-reloads this file.
 
 /* ---------------------------------------------------------------- users */
-export type UserDoc = { _id: string; email: string; name: string; phone: string; passwordHash: string; role: "merchant" | "admin"; createdAt: Date; passwordChangedAt?: Date };
+export type UserDoc = {
+  _id: string; email: string; name: string; phone: string; passwordHash: string; role: Role;
+  /** Missing on accounts created before this field existed: treated as "active". */
+  status?: "active" | "disabled";
+  createdAt: Date; passwordChangedAt?: Date; lastLoginAt?: Date;
+  /** Set when the address was confirmed with an emailed code (accounts created before email verification have none). */
+  emailVerifiedAt?: Date;
+};
 const UserSchema = new Schema<UserDoc>({
   _id: { type: String, required: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   name: { type: String, required: true },
   phone: { type: String, default: "" },
   passwordHash: { type: String, required: true },
-  role: { type: String, enum: ["merchant", "admin"], required: true },
+  role: { type: String, enum: ["merchant", "admin", "superadmin"], required: true },
+  status: { type: String, enum: ["active", "disabled"], default: "active" },
   createdAt: { type: Date, default: () => new Date() },
   passwordChangedAt: Date,
+  lastLoginAt: Date,
+  emailVerifiedAt: Date,
 }, opts);
 UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ role: 1, createdAt: -1 });
 export const UserModel = (mongoose.models.User as Model<UserDoc> | undefined) ?? mongoose.model<UserDoc>("User", UserSchema);
 
 /* ---------------------------------------------------------------- stores */
@@ -101,8 +112,10 @@ const OrderSchema = new Schema<OrderDoc>({
   status: { type: String, enum: ["unfulfilled", "fulfilled", "delivered", "cancelled", "returned"], default: "unfulfilled" },
   discountCode: String,
   checkoutToken: String,
+  customerId: String,
   createdAt: { type: Date, default: () => new Date() },
 }, opts);
+OrderSchema.index({ storeId: 1, customerId: 1, createdAt: -1 }, { partialFilterExpression: { customerId: { $type: "string" } } });
 OrderSchema.index({ storeId: 1, checkoutToken: 1 }, { unique: true, partialFilterExpression: { checkoutToken: { $type: "string" } } });
 OrderSchema.index({ storeId: 1, createdAt: -1 });
 OrderSchema.index({ storeId: 1, number: 1 }, { unique: true });
@@ -154,10 +167,19 @@ type MetaDoc = { _id: string; at: Date };
 export const MetaModel = (mongoose.models.Meta as Model<MetaDoc> | undefined) ?? mongoose.model<MetaDoc>("Meta", new Schema<MetaDoc>({ _id: String, at: { type: Date, default: () => new Date() } }, opts));
 
 /* ---------------------------------------------------------------- security */
-/** Server-side login sessions. Deleting a document signs that device out. Expired ones are removed by MongoDB (TTL index). */
-export type SessionDoc = { _id: string; userId: string; role: "merchant" | "admin"; createdAt: Date; lastSeenAt: Date; expiresAt: Date; ip?: string; userAgent?: string };
+/**
+ * Server-side login sessions. Deleting a document signs that device out. Expired ones are removed by MongoDB (TTL index).
+ *   kind "platform" — merchants and IND2B staff (documents created before `kind` existed are platform sessions)
+ *   kind "customer" — a shopper signed in to one store (storeId set; userId is the customer id)
+ */
+export type SessionKind = "platform" | "customer";
+export type SessionDoc = {
+  _id: string; userId: string; role: Role | "customer"; kind?: SessionKind; storeId?: string;
+  createdAt: Date; lastSeenAt: Date; expiresAt: Date; ip?: string; userAgent?: string;
+};
 const SessionSchema = new Schema<SessionDoc>({
   _id: { type: String, required: true }, userId: { type: String, required: true, index: true }, role: { type: String, required: true },
+  kind: { type: String, enum: ["platform", "customer"], default: "platform" }, storeId: String,
   createdAt: { type: Date, default: () => new Date() }, lastSeenAt: { type: Date, default: () => new Date() },
   expiresAt: { type: Date, required: true }, ip: String, userAgent: String,
 }, opts);
@@ -169,6 +191,61 @@ export type RateLimitDoc = { _id: string; count: number; expiresAt: Date };
 const RateLimitSchema = new Schema<RateLimitDoc>({ _id: String, count: { type: Number, default: 0 }, expiresAt: { type: Date, required: true } }, opts);
 RateLimitSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const RateLimitModel = (mongoose.models.RateLimit as Model<RateLimitDoc> | undefined) ?? mongoose.model<RateLimitDoc>("RateLimit", RateLimitSchema);
+
+/* ---------------------------------------------------------------- shopper accounts */
+/** A shopper's login on ONE store. The same email can have separate accounts on different stores. */
+export type CustomerDoc = {
+  _id: string; storeId: string; email: string; name: string; phone: string; passwordHash: string;
+  status: "active" | "disabled"; createdAt: Date; lastLoginAt?: Date; passwordChangedAt?: Date; emailVerifiedAt?: Date;
+};
+const CustomerSchema = new Schema<CustomerDoc>({
+  _id: { type: String, required: true },
+  storeId: { type: String, required: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  name: { type: String, required: true },
+  phone: { type: String, default: "" },
+  passwordHash: { type: String, required: true },
+  status: { type: String, enum: ["active", "disabled"], default: "active" },
+  createdAt: { type: Date, default: () => new Date() },
+  lastLoginAt: Date,
+  passwordChangedAt: Date,
+  emailVerifiedAt: Date,
+}, opts);
+CustomerSchema.index({ storeId: 1, email: 1 }, { unique: true });
+CustomerSchema.index({ createdAt: -1 });
+export const CustomerModel = (mongoose.models.Customer as Model<CustomerDoc> | undefined) ?? mongoose.model<CustomerDoc>("Customer", CustomerSchema);
+
+/* ---------------------------------------------------------------- email one-time codes */
+/**
+ * One active code per (purpose, scope, email): the _id is "<purpose>:<scope>:<email>", so asking
+ * for a new code replaces the old one. Only an HMAC of the code is stored. `payload` holds a pending
+ * sign-up (name, phone, bcrypt hash of the chosen password) until the email is verified.
+ * Documents are removed by MongoDB one hour after the send window (TTL on purgeAt).
+ */
+export type OtpPurposeDoc = "signup" | "reset";
+export type EmailOtpDoc = {
+  _id: string; purpose: OtpPurposeDoc; scope: string; email: string;
+  codeHash?: string | null; attempts: number; expiresAt: Date;
+  sendCount: number; windowStart: Date; lastSentAt: Date; purgeAt: Date;
+  payload?: Record<string, string> | null; createdAt: Date;
+};
+const EmailOtpSchema = new Schema<EmailOtpDoc>({
+  _id: { type: String, required: true },
+  purpose: { type: String, enum: ["signup", "reset"], required: true },
+  scope: { type: String, required: true },
+  email: { type: String, required: true },
+  codeHash: { type: String, default: null },
+  attempts: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true },
+  sendCount: { type: Number, default: 0 },
+  windowStart: { type: Date, required: true },
+  lastSentAt: { type: Date, required: true },
+  purgeAt: { type: Date, required: true },
+  payload: { type: Schema.Types.Mixed, default: null },
+  createdAt: { type: Date, default: () => new Date() },
+}, { ...opts, minimize: false });
+EmailOtpSchema.index({ purgeAt: 1 }, { expireAfterSeconds: 0 });
+export const EmailOtpModel = (mongoose.models.EmailOtp as Model<EmailOtpDoc> | undefined) ?? mongoose.model<EmailOtpDoc>("EmailOtp", EmailOtpSchema);
 
 /* ---------------------------------------------------------------- media */
 /** Every uploaded image. Pages only ever show URLs that exist here, for the right store. */

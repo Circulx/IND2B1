@@ -1,20 +1,25 @@
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
-import { getStore, listOrders, listProducts } from "@/lib/services";
-import { Button, Card, Input, PageHeader, StatusPill, formatINR } from "@/components/ui";
+import Link from "next/link";
+import { PLANS, getStore, getUser, listOrders, listProducts } from "@/lib/services";
+import { Button, Card, Input, PageHeader, Select, StatusPill, formatINR } from "@/components/ui";
 import { requireAdmin, storeLink } from "@/lib/admin";
 import { storeStatusAction } from "@/actions/admin";
+import { changeStorePlanAction } from "@/actions/superadmin";
 
 export const metadata = { title: "Store" };
 
 export default async function StoreDetail({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const { id } = await params;
   const store = await getStore(id);
   if (!store) notFound();
-  const [orders, products] = await Promise.all([listOrders(store.id), listProducts(store.id)]);
+  const [orders, products, owner] = await Promise.all([listOrders(store.id), listProducts(store.id), getUser(store.ownerId)]);
+  const superAdmin = session.role === "superadmin";
   const rows: [string, React.ReactNode][] = [
-    ["Store ID", <span key="i" className="font-mono">{store.id}</span>], ["Owner user", <span key="o" className="font-mono">{store.ownerId}</span>],
+    ["Store ID", <span key="i" className="font-mono">{store.id}</span>], ["Owner", superAdmin
+      ? <Link key="o" href={`/admin/users/${store.ownerId}`} className="text-teal-700">{owner ? `${owner.name} · ${owner.email}` : store.ownerId}</Link>
+      : <span key="o">{owner ? `${owner.name} · ${owner.email}` : <span className="font-mono">{store.ownerId}</span>}</span>],
     ["Subdomain", <a key="s" href={storeLink(store.slug)} target="_blank" rel="noopener" className="font-mono text-teal-700">{store.slug}.ind2b.com</a>],
     ["Custom domain", store.customDomain ? `${store.customDomain.host} (${store.customDomain.status})` : "—"],
     ["Category", store.category], ["Plan", store.plan], ["Template", `${store.templateId} · v${store.theme.version}`],
@@ -39,6 +44,16 @@ export default async function StoreDetail({ params }: { params: Promise<{ id: st
           </form>
           <p className="text-xs text-muted">Recorded in the audit log with your name.</p>
         </Card>
+        {superAdmin && (
+          <Card className="flex h-fit flex-col gap-3 p-5 lg:col-start-2">
+            <h2 className="font-semibold">Plan <span className="ml-1 text-xs font-normal text-muted">super admin</span></h2>
+            <p className="text-sm text-muted">Changes the store&apos;s plan immediately (for example after an offline payment or a support credit).</p>
+            <form action={changeStorePlanAction.bind(null, store.id)} className="flex gap-2">
+              <Select name="plan" defaultValue={store.plan} aria-label="Plan">{PLANS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+              <Button variant="secondary">Save</Button>
+            </form>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -6,9 +6,24 @@
 export type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "teal";
 
 /* ------------------------------------------------------------------ Sessions */
-export type Role = "merchant" | "admin";
-export type User = { id: string; email: string; name: string; phone: string; role: Role; createdAt: string };
+/**
+ * Platform roles.
+ *   merchant    — owns and runs stores (/dashboard)
+ *   admin       — IND2B staff: KYC, store moderation, plugin review (/admin)
+ *   superadmin  — IND2B owner: everything an admin can do, plus users, staff, plans, shopper accounts and the full audit log
+ * Shoppers are not platform users: each store has its own customer accounts (see CustomerAccount below).
+ */
+export type Role = "merchant" | "admin" | "superadmin";
+export const ROLES: readonly Role[] = ["merchant", "admin", "superadmin"];
+export type StaffRole = Exclude<Role, "merchant">;
+export const isStaff = (role: Role | undefined | null): role is StaffRole => role === "admin" || role === "superadmin";
+export type UserStatus = "active" | "disabled";
+export type User = { id: string; email: string; name: string; phone: string; role: Role; status: UserStatus; createdAt: string; lastLoginAt?: string };
 export type Session = { userId: string; name: string; email: string; role: Role };
+
+/* ------------------------------------------------------------------ Shopper accounts (one set per store) */
+export type CustomerAccount = { id: string; storeId: string; email: string; name: string; phone: string; status: UserStatus; createdAt: string; lastLoginAt?: string };
+export type CustomerSession = { customerId: string; storeId: string; name: string; email: string; sid: string };
 
 /* ------------------------------------------------------------------ Stores (tenants) */
 export type StoreCategory = "fashion" | "electronics" | "grocery" | "beauty" | "home" | "food" | "b2b" | "other";
@@ -71,7 +86,9 @@ export type Order = {
   payment: { method: "upi" | "card" | "netbanking" | "cod"; status: PaymentStatus };
   status: OrderStatus; discountCode?: string;
   checkoutToken?: string;       // one per checkout page load: a double-submitted form cannot create two orders
+  customerId?: string;          // set when a signed-in shopper placed the order
 };
+/** A shopper as seen from their orders (dashboard → Customers). Shopper login accounts are CustomerAccount. */
 export type Customer = { email: string; name: string; phone: string; city: string; orders: number; spentPaise: number };
 export type Discount = { code: string; type: "percent" | "fixed"; value: number; minSubtotalPaise: number; active: boolean; uses: number };
 

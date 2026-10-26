@@ -6,6 +6,7 @@ import { z } from "zod";
 import { cartTotals, createOrder, getProduct, unitPrice } from "@/lib/services";
 import { cartLines, currentDiscount, discountCookie, readCart, resolveStore, writeCart } from "@/lib/storefront";
 import { ipFrom, rateLimit } from "@/lib/security";
+import { getCustomerSession } from "@/lib/auth/customer";
 
 
 
@@ -77,7 +78,7 @@ export async function placeOrder(storeParam: string, _prev: CheckoutState, formD
 
   const lines = await cartLines(store);
   if (lines.length === 0) redirect(`${base}/cart`);
-  const disc = await currentDiscount(store.id);
+  const [disc, shopper] = await Promise.all([currentDiscount(store.id), getCustomerSession(store.id)]);
   const t = cartTotals(lines.map((l) => ({ product: l.product, variant: l.variant, qty: l.item.qty })), store.settings,
     { b2b: store.installedApps.includes("b2b-wholesale"), discount: disc?.discount, customerState: d.state });
 
@@ -90,6 +91,7 @@ export async function placeOrder(storeParam: string, _prev: CheckoutState, formD
       payment: { method: d.payment, status: d.payment === "cod" ? "cod" : "paid" },
       discountCode: t.discountPaise > 0 ? disc?.code : undefined,
       checkoutToken,
+      ...(shopper ? { customerId: shopper.customerId } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error && e.message.startsWith("out_of_stock:") ? `${e.message.slice(13)} just sold out. Update your cart.` : "We couldn't place the order. Please try again.";

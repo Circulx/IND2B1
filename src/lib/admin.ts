@@ -1,7 +1,11 @@
 import "server-only";
-import { requireRole } from "@/lib/auth/server";
+import { requireStaff, requireSuperAdmin as requireSuper } from "@/lib/auth/server";
 
-export const requireAdmin = () => requireRole("admin", "/login?next=/admin");
+/** Any IND2B staff member (admin or super admin). */
+export const requireAdmin = () => requireStaff("/admin/login?next=/admin");
+/** Super admins only (complete control of the platform). */
+export const requireSuperAdmin = () => requireSuper();
+
 export const storeLink = (slug: string) => {
   const root = process.env.ROOT_DOMAIN;
   return !root || root === "localhost" ? `/store/${slug}` : `https://${slug}.${root}`;

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySession } from "@/lib/auth/session";
+import { SESSION_COOKIE, bearerToken, verifySession } from "@/lib/auth/session";
 
 /**
  * Runs before every page and API request.
@@ -9,9 +9,13 @@ import { SESSION_COOKIE, verifySession } from "@/lib/auth/session";
  *      priyahandlooms.localhost:3000/...     → same, for local development
  *      www.priyahandlooms.in/...             → /store/_d/... (store looked up by verified custom domain)
  *
- * 2. Access control (checked again in every layout and Server Action):
- *      /dashboard, /start, /api/uploads, /api/kyc → signed-in store owner (admins may read KYC files)
- *      /admin                                     → signed-in IND2B admin
+ * 2. Access control (checked again in every layout, Server Action and route handler):
+ *      /dashboard, /start, /api/uploads           → signed-in store owner
+ *      /api/kyc                                   → store owner (own files) or IND2B staff
+ *      /admin                                     → IND2B staff: admin or super admin
+ *      /admin/login, /admin/forgot-password,
+ *      /forgot-password, /api/auth/token          → public (sign-in and password reset)
+ *    The token is the session cookie or, for /api/*, an `Authorization: Bearer <jwt>` header.
  *
  * 3. Security headers on every response, including a per-request nonce-based
  *    Content-Security-Policy (blocks injected scripts even if HTML were injected).
@@ -20,7 +24,7 @@ const isProd = process.env.NODE_ENV === "production";
 const ROOT = (process.env.ROOT_DOMAIN || "ind2b.com").toLowerCase();
 const APP_HOSTS = new Set([ROOT, `www.${ROOT}`, "localhost", "127.0.0.1", ...(process.env.APP_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean)]);
 const RESERVED = new Set(["www", "api", "admin", "dashboard", "app", "auth", "cdn", "img", "mail", "static"]);
-const IMG_HOSTS = process.env.CLOUDINARY_CLOUD_NAME ? " https://res.cloudinary.com" : "";
+const IMG_HOSTS = process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_URL ? " https://res.cloudinary.com" : "";
 
 function csp(nonce: string, https: boolean) {
   return [
@@ -74,7 +78,7 @@ export async function proxy(req: NextRequest) {
       }
     }
     // Platform-only areas are never served on a store's hostname.
-    if (/^\/(dashboard|admin|start|login|signup|logout|store)(\/|$)/.test(pathname) || /^\/api\/(uploads|kyc)(\/|$)/.test(pathname)) {
+    if (/^\/(dashboard|admin|start|login|signup|logout|forgot-password|store)(\/|$)/.test(pathname) || /^\/api\/(uploads|kyc|auth)(\/|$)/.test(pathname)) {
       return secure(new NextResponse("Not found", { status: 404 }), policy, isProd && https);
     }
     // Uploaded images (local storage) are served from the same path on every host.
@@ -91,17 +95,24 @@ export async function proxy(req: NextRequest) {
   }
 
   /* ---------------- 2. access control on the platform host */
-  const area = pathname.startsWith("/admin") ? "admin"
+  const area = /^\/admin\/(login|forgot-password)\/?$/.test(pathname) ? null
+    : /^\/admin(\/|$)/.test(pathname) ? "staff"
     : /^\/(dashboard|start)(\/|$)/.test(pathname) ? "merchant"
-    : pathname.startsWith("/api/uploads") ? "merchant"
-    : pathname.startsWith("/api/kyc") ? "any"
+    : /^\/api\/uploads(\/|$)/.test(pathname) ? "merchant"
+    : /^\/api\/kyc(\/|$)/.test(pathname) ? "any"
     : null;
   if (area) {
-    const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
-    const allowed = session && (area === "any" || session.role === area);
+    const isApi = pathname.startsWith("/api/");
+    const session = (await verifySession(req.cookies.get(SESSION_COOKIE)?.value)) ?? (isApi ? await verifySession(bearerToken(req.headers)) : null);
+    const allowed = session && (
+      area === "any" ||
+      (area === "staff" && (session.role === "admin" || session.role === "superadmin")) ||
+      (area === "merchant" && session.role === "merchant")
+    );
     if (!allowed) {
-      if (pathname.startsWith("/api/")) return secure(NextResponse.json({ error: "unauthorized" }, { status: 401 }), policy, isProd && https);
-      const url = new URL(pathname.startsWith("/start") && !session ? "/signup" : "/login", req.url);
+      if (isApi) return secure(NextResponse.json({ error: "unauthorized" }, { status: 401 }), policy, isProd && https);
+      const login = area === "staff" ? "/admin/login" : pathname.startsWith("/start") && !session ? "/signup" : "/login";
+      const url = new URL(login, req.url);
       url.searchParams.set("next", pathname + search);
       return secure(NextResponse.redirect(url), policy, isProd && https);
     }

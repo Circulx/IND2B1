@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { databaseHealth, listAllStores, platformStats } from "@/lib/services";
-import { Card, KpiCard, PageHeader, StatusPill, Table, Td, Th, formatINRCompact } from "@/components/ui";
+import { Banner, Card, KpiCard, PageHeader, StatusPill, Table, Td, Th, formatINRCompact } from "@/components/ui";
 import { BarChart } from "@/components/ui/bar-chart";
 import { requireAdmin } from "@/lib/admin";
 import { recentAudit } from "@/lib/audit";
 
 export const metadata = { title: { absolute: "Overview · IND2B admin" } };
 
-export default async function Overview() {
-  await requireAdmin();
+export default async function Overview({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+  const [session, { denied }] = await Promise.all([requireAdmin(), searchParams]);
   const [stats, stores, log, dbh] = await Promise.all([platformStats(), listAllStores(), recentAudit(8), databaseHealth()]);
   const recent = [...stores].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Platform overview" subtitle="All stores on IND2B." />
+      <PageHeader title="Platform overview" subtitle={`All stores on IND2B · signed in as ${session.role === "superadmin" ? "super admin" : "admin"}`} />
+      {denied && <Banner icon="lock">That page is for super admins only. Ask a super admin if you need access.</Banner>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Stores" value={stats.stores} hint={`${stats.activeStores} live`} icon="store" />
         <KpiCard label="GMV, all stores" value={formatINRCompact(stats.gmvPaise)} hint={`${stats.orders} orders`} icon="rupee" />

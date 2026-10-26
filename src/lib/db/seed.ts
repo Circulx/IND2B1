@@ -1,20 +1,26 @@
 import "server-only";
 import bcrypt from "bcryptjs";
 import { themeFromTemplateForSeed as themeFromTemplate } from "./seed-theme";
-import { CounterModel, DiscountModel, MetaModel, OrderModel, ProductModel, StoreModel, UserModel } from "./models";
+import { CounterModel, CustomerModel, DiscountModel, MetaModel, OrderModel, ProductModel, StoreModel, UserModel } from "./models";
 import type { Order, Product, Store } from "../types";
 
 /**
  * Demo data, inserted once into an empty database the first time the app
  * connects. Turn off with SEED_DEMO_DATA=false. Reset with `npm run db:reset`.
  *
- * Demo sign-ins (shown on /login in development):
- *   Store owner   priya@example.in  /  Demo@1234   (owns Priya Handlooms and Shreeji Steel Tubes)
- *   Platform admin neha@ind2b.com   /  Admin@1234
+ * Demo sign-ins (shown on the sign-in pages in development):
+ *   Store owner      priya@example.in  /  Demo@1234         /login        (owns Priya Handlooms and Shreeji Steel Tubes)
+ *   Platform admin   neha@ind2b.com    /  Admin@1234        /admin/login
+ *   Super admin      root@ind2b.com    /  Super@Admin2026   /admin/login  (complete control)
+ *   Shopper          meera@example.in  /  Shop@1234         Priya Handlooms → /account/login
+ * Never enable demo data in production: create the real super admin with SUPERADMIN_EMAIL /
+ * SUPERADMIN_PASSWORD (see src/lib/db/bootstrap.ts) or `npm run superadmin`.
  */
-export const DEMO_ACCOUNTS = [
-  { email: "priya@example.in", password: "Demo@1234", label: "Store owner · Priya Sharma (2 stores)" },
-  { email: "neha@ind2b.com", password: "Admin@1234", label: "IND2B platform admin · Neha Kulkarni" },
+export const DEMO_ACCOUNTS: { email: string; password: string; label: string; area: "merchant" | "staff" | "shopper" }[] = [
+  { email: "priya@example.in", password: "Demo@1234", label: "Store owner · Priya Sharma (2 stores)", area: "merchant" },
+  { email: "neha@ind2b.com", password: "Admin@1234", label: "IND2B admin · Neha Kulkarni", area: "staff" },
+  { email: "root@ind2b.com", password: "Super@Admin2026", label: "IND2B super admin · Arjun Mehta", area: "staff" },
+  { email: "meera@example.in", password: "Shop@1234", label: "Shopper on Priya Handlooms · Meera Iyer", area: "shopper" },
 ];
 
 export async function ensureSeed() {
@@ -27,7 +33,7 @@ export async function ensureSeed() {
     return;
   }
   await seed();
-  console.info("[ind2b] Seeded demo data: 3 users, 3 stores, products and orders.");
+  console.info("[ind2b] Seeded demo data: 4 users (incl. a super admin), 3 stores, products, orders and a shopper account.");
 }
 
 async function seed() {
@@ -87,7 +93,7 @@ async function seed() {
   };
   const pp = (h: string) => products.find((x) => x.handle === h)!;
   const orders: Order[] = [
-    order(1042, "st_priya", "Meera Iyer", "Bengaluru", "Karnataka", [[pp("chanderi-silk-saree-rani"), 1]], "upi", "unfulfilled", 0),
+    { ...order(1042, "st_priya", "Meera Iyer", "Bengaluru", "Karnataka", [[pp("chanderi-silk-saree-rani"), 1]], "upi", "unfulfilled", 0), customerId: "cus_meera" },
     order(1041, "st_priya", "Ritika Shah", "Pune", "Maharashtra", [[pp("ikat-cotton-kurta-indigo"), 2], [pp("block-print-dupatta"), 1]], "cod", "unfulfilled", 0),
     order(1040, "st_priya", "Anjali Verma", "Delhi", "Delhi", [[pp("kota-doria-saree-mint"), 1]], "card", "fulfilled", 1),
     order(1039, "st_priya", "Sana Khan", "Hyderabad", "Telangana", [[pp("banarasi-silk-saree-gold"), 1]], "upi", "delivered", 3),
@@ -99,8 +105,11 @@ async function seed() {
   { _id: "usr_priya", email: "priya@example.in", name: "Priya Sharma", phone: "+91 98220 41736", role: "merchant", password: "Demo@1234" },
   { _id: "usr_kiran", email: "kiran@example.in", name: "Kiran Patel", phone: "", role: "merchant", password: "Demo@1234" },
   { _id: "usr_neha", email: "neha@ind2b.com", name: "Neha Kulkarni", phone: "", role: "admin", password: "Admin@1234" },
+  { _id: "usr_root", email: "root@ind2b.com", name: "Arjun Mehta", phone: "", role: "superadmin", password: "Super@Admin2026" },
   ];
-  await UserModel.insertMany(await Promise.all(users.map(async ({ password, ...u }) => ({ ...u, passwordHash: await bcrypt.hash(password, 10), createdAt: new Date() }))));
+  await UserModel.insertMany(await Promise.all(users.map(async ({ password, ...u }) => ({ ...u, status: "active", passwordHash: await bcrypt.hash(password, 10), createdAt: new Date() }))));
+  // A shopper account on Priya Handlooms, owning the newest demo order.
+  await CustomerModel.create({ _id: "cus_meera", storeId: "st_priya", email: "meera@example.in", name: "Meera Iyer", phone: "+91 90000 00000", passwordHash: await bcrypt.hash("Shop@1234", 10), status: "active", createdAt: new Date() });
 
   const stores = [priya, shreeji, kiran];
   await StoreModel.insertMany(stores.map(({ id, createdAt, ...s }) => ({ ...s, _id: id, createdAt: new Date(createdAt), draftTheme: null, customDomain: s.customDomain ?? null })));

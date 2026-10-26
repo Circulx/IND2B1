@@ -14,7 +14,7 @@ export default async function Account() {
       <PageHeader title="Account & security" subtitle={session.email} />
       <div className="grid gap-5 lg:grid-cols-2">
         <ProfileForm name={user?.name ?? ""} phone={user?.phone ?? ""} />
-        <PasswordForm />
+        <PasswordForm strong />
       </div>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-3">

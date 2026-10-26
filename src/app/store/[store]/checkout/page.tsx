@@ -6,6 +6,8 @@ import { formatINR } from "@/components/ui";
 import { INDIAN_STATES, cartLines, currentDiscount, resolveStore } from "@/lib/storefront";
 import { placeOrder } from "@/actions/storefront";
 import { CheckoutForm } from "@/components/storefront/checkout-form";
+import { getCustomerSession } from "@/lib/auth/customer";
+import { getCustomerAccount } from "@/lib/services";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
@@ -14,13 +16,17 @@ export default async function CheckoutPage({ params }: { params: Promise<{ store
   const { store, base } = await resolveStore(slug);
   const lines = await cartLines(store);
   if (lines.length === 0) redirect(`${base}/cart`);
-  const disc = await currentDiscount(store.id);
+  const [disc, me] = await Promise.all([currentDiscount(store.id), getCustomerSession(store.id)]);
+  const account = me ? await getCustomerAccount(store.id, me.customerId) : undefined;
   const t = cartTotals(lines.map((l) => ({ product: l.product, variant: l.variant, qty: l.item.qty })), store.settings, { b2b: store.installedApps.includes("b2b-wholesale"), discount: disc?.discount });
   return (
     <div className="grid gap-10 px-5 py-10 md:px-10 lg:grid-cols-[1fr_380px]">
       <div className="max-w-2xl">
         <h1 className="mb-6 text-3xl font-semibold" style={{ fontFamily: "var(--store-font)" }}>Checkout</h1>
-        <CheckoutForm token={randomBytes(18).toString("base64url")} action={placeOrder.bind(null, slug)} online={store.installedApps.includes("razorpay")} cod={store.installedApps.includes("cod")} states={INDIAN_STATES} totalLabel={formatINR(t.totalPaise)} />
+        {account
+          ? <p className="mb-6 text-sm text-muted">Signed in as <b className="text-ink">{account.email}</b>. This order will appear in <a href={`${base}/account`} className="underline">your account</a>.</p>
+          : <p className="mb-6 text-sm text-muted">Have an account? <a href={`${base}/account/login?next=${encodeURIComponent(`${base}/checkout`)}`} className="font-semibold" style={{ color: "var(--store-primary)" }}>Sign in</a> for faster checkout, or continue as a guest.</p>}
+        <CheckoutForm defaults={account ? { email: account.email, name: account.name, phone: account.phone } : undefined} token={randomBytes(18).toString("base64url")} action={placeOrder.bind(null, slug)} online={store.installedApps.includes("razorpay")} cod={store.installedApps.includes("cod")} states={INDIAN_STATES} totalLabel={formatINR(t.totalPaise)} />
       </div>
       <aside className="flex flex-col gap-3 self-start rounded-card border border-line bg-white p-6 text-sm">
         <h2 className="text-lg font-semibold">{lines.length} item{lines.length > 1 ? "s" : ""}</h2>

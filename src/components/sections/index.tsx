@@ -86,6 +86,7 @@ function Header({ settings, ctx }: Props) {
       </nav>
       <div className="flex-1" />
       <A ctx={ctx} href={href(ctx, "/collections/all")} aria-label="Search" style={{ color: "var(--store-text)" }}><Icon name="search" size={20} /></A>
+      <A ctx={ctx} href={href(ctx, "/account")} aria-label="Your account" style={{ color: "var(--store-text)" }}><Icon name="user" size={21} /></A>
       <A ctx={ctx} href={href(ctx, "/cart")} aria-label={`Cart, ${ctx.cartCount ?? 0} items`} className="relative" style={{ color: "var(--store-text)" }}>
         <Icon name="cart" size={22} />
         {!!ctx.cartCount && <span className="absolute -right-2 -top-2 flex size-[18px] items-center justify-center rounded-full text-[10px] font-semibold" style={accentBtn}>{ctx.cartCount}</span>}

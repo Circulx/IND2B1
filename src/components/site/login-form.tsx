@@ -7,7 +7,7 @@ import { logIn, type AuthState } from "@/actions/auth";
 
 type Demo = { email: string; password: string; label: string };
 
-export function LoginForm({ next, demo }: { next?: string; demo: Demo[] }) {
+export function LoginForm({ next, demo, notice }: { next?: string; demo: Demo[]; notice?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(logIn, {});
   const email = useRef<HTMLInputElement>(null);
   const password = useRef<HTMLInputElement>(null);
@@ -15,9 +15,11 @@ export function LoginForm({ next, demo }: { next?: string; demo: Demo[] }) {
   return (
     <form action={action} className="flex w-full max-w-[420px] flex-col gap-5">
       <div><h2 className="text-[28px]">Log in</h2><p className="mt-1.5 text-muted">Manage your store, orders and payments.</p></div>
+      {notice && <p role="status" className="rounded-control bg-ok-50 p-3 text-sm text-ok">{notice}</p>}
       <input type="hidden" name="next" value={next ?? ""} />
       <Field label="Email" htmlFor="email"><Input ref={email} id="email" name="email" type="email" autoComplete="email" defaultValue={state.values?.email} required /></Field>
       <Field label="Password" htmlFor="password" error={state.error}><Input ref={password} id="password" name="password" type="password" autoComplete="current-password" required /></Field>
+      <Link href="/forgot-password" className="-mt-2 self-end text-sm font-semibold text-teal-700">Forgot password?</Link>
       <Button type="submit" size="lg" disabled={pending}>{pending ? "Logging in…" : "Log in"}</Button>
       <p className="text-center text-sm">New to IND2B? <Link href="/signup" className="font-semibold text-teal-700">Create your store</Link></p>
       {demo.length > 0 && (

@@ -35,6 +35,8 @@ export async function connectDb() {
           const { ensureSeed } = await import("./seed");
           await ensureSeed();
         }
+        const { ensureSuperAdmin } = await import("./bootstrap");
+        await ensureSuperAdmin();
         return m;
       });
     cache.conn.catch(() => { cache.conn = undefined; });

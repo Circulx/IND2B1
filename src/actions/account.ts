@@ -6,7 +6,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { changePassword, passwordProblem, revokeOwnSession, revokeSession, revokeUserSessions, updateProfile } from "@/lib/services";
 import { getSession } from "@/lib/auth/server";
-import { ACTIVE_STORE_COOKIE, SESSION_COOKIE } from "@/lib/auth/session";
+import { ACTIVE_STORE_COOKIE, SESSION_COOKIE, loginPathFor } from "@/lib/auth/session";
+import { isStaff } from "@/lib/types";
 import { rateLimit, waitText } from "@/lib/security";
 
 export type AccountState = { ok?: string; error?: string; fieldErrors?: Record<string, string> } | undefined;
@@ -36,7 +37,7 @@ export async function changePasswordAction(_prev: AccountState, fd: FormData): P
   const current = String(fd.get("current") ?? "");
   const next = String(fd.get("next") ?? "");
   if (next !== String(fd.get("confirm") ?? "")) return { fieldErrors: { confirm: "The two new passwords do not match." } };
-  const problem = passwordProblem(next, s.email);
+  const problem = passwordProblem(next, s.email, { strong: isStaff(s.role) });
   if (problem) return { fieldErrors: { next: problem } };
   const limit = await rateLimit(`pwchange:${s.userId}`, 5, 15 * 60);
   if (!limit.ok) return { error: `Too many attempts. Try again in ${waitText(limit.retryAfterS)}.` };
@@ -59,7 +60,7 @@ export async function signOutDevice(sid: string) {
     const jar = await cookies();
     jar.delete(SESSION_COOKIE);
     jar.delete(ACTIVE_STORE_COOKIE);
-    redirect("/login");
+    redirect(loginPathFor(s.role));
   }
   await revokeOwnSession(s.userId, sid);
   revalidatePath("/dashboard/account");

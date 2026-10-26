@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ButtonLink, Logo } from "@/components/ui";
 import { getSession } from "@/lib/auth/server";
+import { isStaff } from "@/lib/types";
 
 export async function SiteHeader() {
   const session = await getSession();
@@ -15,7 +16,7 @@ export async function SiteHeader() {
         </nav>
         <div className="flex-1" />
         {session ? (
-          <Link href={session.role === "admin" ? "/admin" : "/dashboard"} className="text-[15px] font-semibold text-teal-700">Go to dashboard</Link>
+          <Link href={isStaff(session.role) ? "/admin" : "/dashboard"} className="text-[15px] font-semibold text-teal-700">Go to dashboard</Link>
         ) : (
           <>
             <Link href="/login" className="text-[15px] font-semibold text-ink-2">Log in</Link>
