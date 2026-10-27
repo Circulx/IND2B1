@@ -63,7 +63,7 @@ export type Variant = { id: string; title: string; sku: string; pricePaise: numb
 /** An uploaded image (see src/lib/media). `url` is always one this platform issued. */
 export type ImageRef = { id: string; url: string; alt?: string; width?: number; height?: number };
 export type KycDoc = { fileId: string; kind: "pan" | "bank" | "gst"; filename: string; contentType: string; size: number; uploadedAt: string };
-export type MediaItem = ImageRef & { storeId: string; purpose: "product" | "logo" | "section"; bytes: number; provider: "cloudinary" | "local"; createdAt: string };
+export type MediaItem = ImageRef & { storeId: string; purpose: "product" | "logo" | "section"; bytes: number; provider: "cloudinary" | "mongodb" | "local"; createdAt: string };
 
 export type Product = {
   id: string; storeId: string; handle: string; title: string; description: string;

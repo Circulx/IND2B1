@@ -2,18 +2,22 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import mongoose from "mongoose";
+import { connectDb } from "../db/connect";
 import { env, mediaProvider } from "../env";
 
 /**
  * Where image files live.
  *   cloudinary — when CLOUDINARY_URL (or CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET) is set. Required in production:
  *                global CDN, automatic WebP/AVIF per browser, on-the-fly resizing.
- *   local      — files in UPLOAD_DIR (default ./.uploads), served by /media/... Good for development
- *                or a single server with a persistent disk.
+ *   mongodb    — when Cloudinary is not configured: the image bytes are stored in the same MongoDB
+ *                database (GridFS bucket "media") and served by /media/... Works with any number of
+ *                app servers, nothing is written to the server's disk.
+ *   local      — legacy only: files written to UPLOAD_DIR by earlier versions are still served and deleted.
  * The API secret never leaves the server: uploads are signed here and sent from here.
  */
 
-export type Stored = { provider: "cloudinary" | "local"; key: string; url: string };
+export type Stored = { provider: "cloudinary" | "mongodb" | "local"; key: string; url: string };
 const KEY_RE = /^[a-z0-9_-]{1,64}\/[a-z0-9]{24}\.webp$/;
 
 export const localDir = () => path.resolve(/* turbopackIgnore: true */ process.cwd(), env().UPLOAD_DIR);
@@ -49,13 +53,41 @@ export async function storeImage(storeId: string, data: Buffer): Promise<Stored>
   }
 
   const key = `${storeId}/${name}.webp`;
-  const file = path.join(localDir(), key);
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, data, { flag: "wx" });
-  return { provider: "local", key, url: `/media/${key}` };
+  const bucket = await mediaBucket();
+  await new Promise<void>((resolve, reject) => {
+    const up = bucket.openUploadStream(key, { metadata: { storeId, contentType: "image/webp" } });
+    up.on("error", reject);
+    up.on("finish", () => resolve());
+    up.end(data);
+  });
+  return { provider: "mongodb", key, url: `/media/${key}` };
 }
 
-export async function removeImage(stored: { provider: "cloudinary" | "local"; key: string }) {
+/** GridFS bucket holding image files when Cloudinary is not configured. */
+async function mediaBucket() {
+  const m = await connectDb();
+  return new mongoose.mongo.GridFSBucket(m.connection.db!, { bucketName: "media" });
+}
+
+/** Image bytes for /media/<key>: from MongoDB, or (older uploads) from the legacy upload folder. */
+export async function readStoredImage(key: string): Promise<Buffer | null> {
+  if (!isValidLocalKey(key)) return null;
+  const bucket = await mediaBucket();
+  const [file] = await bucket.find({ filename: key }).limit(1).toArray();
+  if (file) {
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      bucket.openDownloadStream(file._id).on("data", (c: Buffer) => chunks.push(c)).on("error", reject).on("end", () => resolve());
+    });
+    return Buffer.concat(chunks);
+  }
+  const root = localDir();
+  const legacy = path.resolve(root, key);
+  if (!legacy.startsWith(root + path.sep)) return null;
+  return fs.readFile(legacy).catch(() => null);
+}
+
+export async function removeImage(stored: { provider: "cloudinary" | "mongodb" | "local"; key: string }) {
   if (stored.provider === "cloudinary") {
     const e = env();
     if (!e.CLOUDINARY_CLOUD_NAME) return;
@@ -68,10 +100,15 @@ export async function removeImage(stored: { provider: "cloudinary" | "local"; ke
     return;
   }
   if (!isValidLocalKey(stored.key)) return;
+  if (stored.provider === "mongodb") {
+    const bucket = await mediaBucket();
+    for (const f of await bucket.find({ filename: stored.key }).toArray()) await bucket.delete(f._id).catch(() => {});
+    return;
+  }
   await fs.rm(path.join(localDir(), stored.key), { force: true });
 }
 
-/** Cloudinary URLs can be resized on the fly; local files are already at most 2000 px. */
+/** Cloudinary URLs can be resized on the fly; MongoDB-stored files are already at most 2000 px. */
 export function sizedUrl(url: string, width: number) {
   return url.includes("res.cloudinary.com/") ? url.replace("/image/upload/f_auto,q_auto/", `/image/upload/f_auto,q_auto,c_limit,w_${width}/`) : url;
 }

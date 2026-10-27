@@ -1,28 +1,20 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { isValidLocalKey, localDir } from "@/lib/media/storage";
+import { readStoredImage } from "@/lib/media/storage";
 
 /**
- * GET /media/<storeId>/<name>.webp — images stored on local disk (when Cloudinary is not configured).
- * The key is checked against a strict pattern, so no path outside the upload folder can be read.
+ * GET /media/<storeId>/<name>.webp — images stored in MongoDB (GridFS bucket "media") when Cloudinary
+ * is not configured; files from older versions in the legacy upload folder are still served.
+ * The key is checked against a strict pattern, so nothing else can be read.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const key = (await params).key.join("/");
-  if (!isValidLocalKey(key)) return new Response("Not found", { status: 404 });
-  const root = localDir();
-  const file = path.resolve(root, key);
-  if (!file.startsWith(root + path.sep)) return new Response("Not found", { status: 404 });
-  try {
-    const data = await fs.readFile(file);
-    return new Response(new Uint8Array(data), {
-      headers: {
-        "Content-Type": "image/webp",
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
-      },
-    });
-  } catch {
-    return new Response("Not found", { status: 404 });
-  }
+  const data = await readStoredImage(key).catch(() => null);
+  if (!data) return new Response("Not found", { status: 404 });
+  return new Response(new Uint8Array(data), {
+    headers: {
+      "Content-Type": "image/webp",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    },
+  });
 }

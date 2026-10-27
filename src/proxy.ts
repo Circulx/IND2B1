@@ -13,6 +13,9 @@ import { SESSION_COOKIE, bearerToken, verifySession } from "@/lib/auth/session";
  *      /dashboard, /start, /api/uploads           → signed-in store owner
  *      /api/kyc                                   → store owner (own files) or IND2B staff
  *      /admin                                     → IND2B staff: admin or super admin
+ *      /superadmin                                → super admin control centre: super admins only
+ *      /superadmin/login, /superadmin/forgot-password,
+ *      /superadmin/logout                         → public (super admin sign-in, reset and sign-out)
  *      /admin/login, /admin/forgot-password,
  *      /forgot-password, /api/auth/token          → public (sign-in and password reset)
  *    The token is the session cookie or, for /api/*, an `Authorization: Bearer <jwt>` header.
@@ -78,7 +81,7 @@ export async function proxy(req: NextRequest) {
       }
     }
     // Platform-only areas are never served on a store's hostname.
-    if (/^\/(dashboard|admin|start|login|signup|logout|forgot-password|store)(\/|$)/.test(pathname) || /^\/api\/(uploads|kyc|auth)(\/|$)/.test(pathname)) {
+    if (/^\/(dashboard|admin|superadmin|start|login|signup|logout|forgot-password|store)(\/|$)/.test(pathname) || /^\/api\/(uploads|kyc|auth)(\/|$)/.test(pathname)) {
       return secure(new NextResponse("Not found", { status: 404 }), policy, isProd && https);
     }
     // Uploaded images (local storage) are served from the same path on every host.
@@ -96,6 +99,8 @@ export async function proxy(req: NextRequest) {
 
   /* ---------------- 2. access control on the platform host */
   const area = /^\/admin\/(login|forgot-password)\/?$/.test(pathname) ? null
+    : /^\/superadmin\/(login|forgot-password|logout)\/?$/.test(pathname) ? null
+    : /^\/superadmin(\/|$)/.test(pathname) ? "super"
     : /^\/admin(\/|$)/.test(pathname) ? "staff"
     : /^\/(dashboard|start)(\/|$)/.test(pathname) ? "merchant"
     : /^\/api\/uploads(\/|$)/.test(pathname) ? "merchant"
@@ -107,11 +112,12 @@ export async function proxy(req: NextRequest) {
     const allowed = session && (
       area === "any" ||
       (area === "staff" && (session.role === "admin" || session.role === "superadmin")) ||
+      (area === "super" && session.role === "superadmin") ||
       (area === "merchant" && session.role === "merchant")
     );
     if (!allowed) {
       if (isApi) return secure(NextResponse.json({ error: "unauthorized" }, { status: 401 }), policy, isProd && https);
-      const login = area === "staff" ? "/admin/login" : pathname.startsWith("/start") && !session ? "/signup" : "/login";
+      const login = area === "super" ? "/superadmin/login" : area === "staff" ? "/admin/login" : pathname.startsWith("/start") && !session ? "/signup" : "/login";
       const url = new URL(login, req.url);
       url.searchParams.set("next", pathname + search);
       return secure(NextResponse.redirect(url), policy, isProd && https);

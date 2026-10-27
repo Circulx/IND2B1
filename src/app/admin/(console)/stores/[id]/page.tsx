@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PLANS, getStore, getUser, listOrders, listProducts } from "@/lib/services";
+import { getStore, getUser, listOrders, listPlans, listProducts } from "@/lib/services";
 import { Button, Card, Input, PageHeader, Select, StatusPill, formatINR } from "@/components/ui";
 import { requireAdmin, storeLink } from "@/lib/admin";
 import { storeStatusAction } from "@/actions/admin";
@@ -14,7 +14,7 @@ export default async function StoreDetail({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const store = await getStore(id);
   if (!store) notFound();
-  const [orders, products, owner] = await Promise.all([listOrders(store.id), listProducts(store.id), getUser(store.ownerId)]);
+  const [orders, products, owner, plans] = await Promise.all([listOrders(store.id), listProducts(store.id), getUser(store.ownerId), listPlans()]);
   const superAdmin = session.role === "superadmin";
   const rows: [string, React.ReactNode][] = [
     ["Store ID", <span key="i" className="font-mono">{store.id}</span>], ["Owner", superAdmin
@@ -49,7 +49,7 @@ export default async function StoreDetail({ params }: { params: Promise<{ id: st
             <h2 className="font-semibold">Plan <span className="ml-1 text-xs font-normal text-muted">super admin</span></h2>
             <p className="text-sm text-muted">Changes the store&apos;s plan immediately (for example after an offline payment or a support credit).</p>
             <form action={changeStorePlanAction.bind(null, store.id)} className="flex gap-2">
-              <Select name="plan" defaultValue={store.plan} aria-label="Plan">{PLANS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+              <Select name="plan" defaultValue={store.plan} aria-label="Plan">{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
               <Button variant="secondary">Save</Button>
             </form>
           </Card>

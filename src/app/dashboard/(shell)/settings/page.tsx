@@ -1,4 +1,4 @@
-import { PLANS } from "@/lib/services";
+import { listPlans } from "@/lib/services";
 import { Banner, Button, Card, PageHeader, StatusPill, formatINR } from "@/components/ui";
 import { KycCard } from "@/components/dashboard/kyc-card";
 import { LogoCard } from "@/components/dashboard/logo-card";
@@ -11,6 +11,7 @@ export const metadata = { title: "Settings" };
 export default async function Settings({ searchParams }: { searchParams: Promise<{ kyc?: string; saved?: string }> }) {
   const { kyc, saved } = await searchParams;
   const { store } = await requireStore();
+  const plans = await listPlans();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Settings" subtitle={`Store ID ${store.id}`} />
@@ -22,7 +23,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       <section id="plan" className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Plan</h2>
         <div className="grid gap-4 md:grid-cols-3">
-          {PLANS.map((p) => {
+          {plans.map((p) => {
             const current = p.id === store.plan;
             return (
               <Card key={p.id} className={current ? "flex flex-col gap-3 border-teal-700 p-5 ring-1 ring-teal-700" : "flex flex-col gap-3 p-5"}>

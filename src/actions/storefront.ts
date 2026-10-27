@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { cartTotals, createOrder, getProduct, unitPrice } from "@/lib/services";
-import { cartLines, currentDiscount, discountCookie, readCart, resolveStore, writeCart } from "@/lib/storefront";
+import { cartLines, clearCart, currentDiscount, discountCookie, readCart, resolveStore, setCartDiscount, writeCart } from "@/lib/storefront";
 import { ipFrom, rateLimit } from "@/lib/security";
 import { getCustomerSession } from "@/lib/auth/customer";
 
@@ -35,9 +35,8 @@ export async function updateCartLine(storeParam: string, variantId: string, qty:
 export async function applyDiscount(storeParam: string, formData: FormData) {
   const { store, base } = await resolveStore(storeParam);
   const code = String(formData.get("code") ?? "").trim().toUpperCase().slice(0, 30);
-  const jar = await cookies();
-  if (!code) jar.delete(discountCookie(store.id));
-  else jar.set(discountCookie(store.id), code, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 });
+  await setCartDiscount(store.id, code || null);       // saved on the cart in MongoDB
+  (await cookies()).delete(discountCookie(store.id));   // remove the cookie used by earlier versions
   redirect(`${base}/cart`);
 }
 
@@ -97,7 +96,7 @@ export async function placeOrder(storeParam: string, _prev: CheckoutState, formD
     const msg = e instanceof Error && e.message.startsWith("out_of_stock:") ? `${e.message.slice(13)} just sold out. Update your cart.` : "We couldn't place the order. Please try again.";
     return { errors: { form: msg }, values };
   }
-  await writeCart(store.id, []);
+  await clearCart(store.id);
   const jar = await cookies();
   jar.delete(discountCookie(store.id));
   jar.set(`last_order_${store.id}`, order.id, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 });

@@ -1,6 +1,7 @@
 import "server-only";
-import { APPS, PLANS, TEMPLATES } from "../catalog";
+import { APPS, TEMPLATES } from "../catalog";
 import { connectDb } from "../db/connect";
+import { listPlans as listPlansFromDb } from "./plans";
 import {
   type StoreDoc, AppReviewModel, CounterModel, DiscountModel, OrderModel, ProductModel, QuoteRequestModel, StoreModel, SubscriberModel,
 } from "../db/models";
@@ -15,6 +16,7 @@ export * from "./users";
 export * from "./sessions";
 export * from "./customers";
 export * from "./otp";
+export * from "./carts";
 
 /**
  * Data access for the whole app, on MongoDB (Mongoose).
@@ -64,7 +66,7 @@ export const themeFromTemplate = (templateId: string, version = 1): Theme => {
 /* ================================================================ platform catalog */
 export const listTemplates = async () => TEMPLATES;                                   // GET /themes/templates
 export const getTemplate = async (id: string) => TEMPLATES.find((t) => t.id === id);
-export const listPlans = async () => PLANS;                                           // GET /billing/plans
+export { listPlans, getPlan, updatePlan, isPlanId } from "./plans";                   // GET /billing/plans (MongoDB)
 
 async function appsWithStatus(): Promise<AppDef[]> {
   await connectDb();
@@ -391,17 +393,18 @@ export async function storeStats(storeId: string) {                             
 
 export async function platformStats() {                                                                 // GET /analytics/platform
   await connectDb();
-  const [stores, orders, apps] = await Promise.all([
+  const [stores, orders, apps, plans] = await Promise.all([
     StoreModel.find({}, { status: 1, kyc: 1, plan: 1 }).lean<Raw[]>(),
     OrderModel.find({}, { status: 1, totalPaise: 1 }).lean<Raw[]>(),
     appsWithStatus(),
+    listPlansFromDb(),
   ]);
   const gmv = orders.filter((o) => o.status !== "cancelled" && o.status !== "returned").reduce((a, o) => a + Number(o.totalPaise), 0);
   return {
     stores: stores.length, activeStores: stores.filter((s) => s.status === "active").length,
     kycPending: stores.filter((s) => s.kyc === "pending").length, gmvPaise: gmv, orders: orders.length,
     appsInReview: apps.filter((a) => a.status === "in_review").length,
-    byPlan: PLANS.map((p) => ({ plan: p.name, stores: stores.filter((s) => s.plan === p.id).length })),
+    byPlan: plans.map((p) => ({ plan: p.name, stores: stores.filter((s) => s.plan === p.id).length })),
   };
 }
 

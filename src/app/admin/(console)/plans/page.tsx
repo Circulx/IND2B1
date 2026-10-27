@@ -1,4 +1,4 @@
-import { PLANS, listAllStores } from "@/lib/services";
+import { listAllStores, listPlans } from "@/lib/services";
 import { Card, PageHeader, Table, Td, Th, formatINR } from "@/components/ui";
 import { requireAdmin } from "@/lib/admin";
 
@@ -6,7 +6,7 @@ export const metadata = { title: "Plans & fees" };
 
 export default async function Plans() {
   await requireAdmin();
-  const stores = await listAllStores();
+  const [stores, plans] = await Promise.all([listAllStores(), listPlans()]);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Plans & fees" subtitle="Changes apply to new billing cycles and are announced to merchants 30 days ahead." />
@@ -14,7 +14,7 @@ export default async function Plans() {
         <Table>
           <thead><tr><Th>Plan</Th><Th right>Monthly price</Th><Th right>Transaction fee</Th><Th>Includes</Th><Th right>Stores</Th><Th right>MRR</Th></tr></thead>
           <tbody>
-            {PLANS.map((p) => {
+            {plans.map((p) => {
               const n = stores.filter((s) => s.plan === p.id).length;
               return (
                 <tr key={p.id}>

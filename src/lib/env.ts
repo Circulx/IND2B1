@@ -38,7 +38,7 @@ const schema = z.object({
   EMAIL_REPLY_TO: z.string().trim().email().optional(),
   SMTP_HOST: z.string().trim().optional(),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
-  /** Production stores images on Cloudinary. Set to "true" only for a single server with a persistent disk. */
+  /** Kept for compatibility (no longer required): without Cloudinary, images are stored in MongoDB. */
   ALLOW_LOCAL_UPLOADS: z.enum(["true", "false"]).default("false"),
 })
   // CLOUDINARY_URL fills in the three separate variables (explicit variables win).
@@ -54,9 +54,7 @@ const schema = z.object({
     }
     if (v.EMAIL_PROVIDER === "smtp" && !v.SMTP_HOST) ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "EMAIL_PROVIDER=smtp needs SMTP_HOST" });
     if (isProd && v.EMAIL_PROVIDER === "console") ctx.addIssue({ code: "custom", path: ["EMAIL_PROVIDER"], message: "EMAIL_PROVIDER=console is for development only" });
-    if (isProd && c === 0 && v.ALLOW_LOCAL_UPLOADS !== "true") {
-      ctx.addIssue({ code: "custom", path: ["CLOUDINARY_URL"], message: "Images are stored on Cloudinary in production: set CLOUDINARY_URL (or ALLOW_LOCAL_UPLOADS=true for a single server with a persistent disk)" });
-    }
+    // Without Cloudinary, images are stored in MongoDB (GridFS), so production no longer needs a persistent disk.
   });
 
 export type Env = z.infer<typeof schema>;
@@ -74,4 +72,4 @@ export function env(): Env {
   return cached;
 }
 
-export const mediaProvider = () => (env().CLOUDINARY_CLOUD_NAME ? "cloudinary" : "local") as "cloudinary" | "local";
+export const mediaProvider = () => (env().CLOUDINARY_CLOUD_NAME ? "cloudinary" : "mongodb") as "cloudinary" | "mongodb";

@@ -250,15 +250,53 @@ export const EmailOtpModel = (mongoose.models.EmailOtp as Model<EmailOtpDoc> | u
 /* ---------------------------------------------------------------- media */
 /** Every uploaded image. Pages only ever show URLs that exist here, for the right store. */
 export type MediaDoc = {
-  _id: string; storeId: string; ownerId: string; purpose: "product" | "logo" | "section"; provider: "cloudinary" | "local";
+  _id: string; storeId: string; ownerId: string; purpose: "product" | "logo" | "section"; provider: "cloudinary" | "mongodb" | "local";
   key: string; url: string; width: number; height: number; bytes: number; format: string; alt?: string; createdAt: Date;
 };
 const MediaSchema = new Schema<MediaDoc>({
   _id: { type: String, required: true }, storeId: { type: String, required: true }, ownerId: { type: String, required: true },
-  purpose: { type: String, enum: ["product", "logo", "section"], required: true }, provider: { type: String, enum: ["cloudinary", "local"], required: true },
+  purpose: { type: String, enum: ["product", "logo", "section"], required: true }, provider: { type: String, enum: ["cloudinary", "mongodb", "local"], required: true },
   key: { type: String, required: true }, url: { type: String, required: true }, width: Number, height: Number, bytes: Number, format: String, alt: String,
   createdAt: { type: Date, default: () => new Date() },
 }, opts);
 MediaSchema.index({ storeId: 1, createdAt: -1 });
 MediaSchema.index({ url: 1 });
 export const MediaModel = (mongoose.models.Media as Model<MediaDoc> | undefined) ?? mongoose.model<MediaDoc>("Media", MediaSchema);
+
+/* ---------------------------------------------------------------- shopping carts */
+/**
+ * A shopper's cart on ONE store. The browser only keeps the random cart id in an httpOnly cookie;
+ * items and the applied discount code live here. A signed-in shopper's cart carries customerId so it
+ * follows them to other devices. Carts untouched for 30 days are removed by MongoDB (TTL on expiresAt).
+ */
+export type CartDoc = {
+  _id: string; storeId: string; customerId?: string;
+  items: { productId: string; variantId: string; qty: number }[];
+  discountCode?: string | null; createdAt: Date; updatedAt: Date; expiresAt: Date;
+};
+const CartSchema = new Schema<CartDoc>({
+  _id: { type: String, required: true },
+  storeId: { type: String, required: true },
+  customerId: String,
+  items: { type: [new Schema({ productId: String, variantId: String, qty: Number }, { _id: false })], default: [] },
+  discountCode: { type: String, default: null },
+  createdAt: { type: Date, default: () => new Date() },
+  updatedAt: { type: Date, default: () => new Date() },
+  expiresAt: { type: Date, required: true },
+}, opts);
+CartSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+CartSchema.index({ storeId: 1, customerId: 1, updatedAt: -1 }, { partialFilterExpression: { customerId: { $type: "string" } } });
+export const CartModel = (mongoose.models.Cart as Model<CartDoc> | undefined) ?? mongoose.model<CartDoc>("Cart", CartSchema);
+
+/* ---------------------------------------------------------------- billing plans */
+/** Subscription plans. Seeded from src/lib/catalog.ts on first use; super admins edit them in /superadmin/plans. */
+export type PlanDoc = { _id: "starter" | "grow" | "pro"; name: string; pricePaise: number | null; transactionFeePct: number; features: string[]; order: number; updatedAt: Date };
+export const PlanModel = (mongoose.models.Plan as Model<PlanDoc> | undefined) ?? mongoose.model<PlanDoc>("Plan", new Schema<PlanDoc>({
+  _id: { type: String, enum: ["starter", "grow", "pro"], required: true },
+  name: { type: String, required: true },
+  pricePaise: { type: Number, default: null },
+  transactionFeePct: { type: Number, required: true },
+  features: { type: [String], default: [] },
+  order: { type: Number, default: 0 },
+  updatedAt: { type: Date, default: () => new Date() },
+}, opts));

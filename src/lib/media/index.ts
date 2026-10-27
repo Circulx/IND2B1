@@ -11,7 +11,7 @@ export { ImageError, MAX_UPLOAD_BYTES } from "./process";
 export { sizedUrl } from "./storage";
 
 type Purpose = "product" | "section" | "logo";
-const toItem = (m: { _id: string; storeId: string; purpose: Purpose; url: string; width: number; height: number; bytes: number; provider: "cloudinary" | "local"; alt?: string; createdAt: Date }): MediaItem =>
+const toItem = (m: { _id: string; storeId: string; purpose: Purpose; url: string; width: number; height: number; bytes: number; provider: "cloudinary" | "mongodb" | "local"; alt?: string; createdAt: Date }): MediaItem =>
   ({ id: m._id, storeId: m.storeId, purpose: m.purpose, url: m.url, width: m.width, height: m.height, bytes: m.bytes, provider: m.provider, alt: m.alt ?? "", createdAt: m.createdAt.toISOString() });
 
 /** Validates, re-encodes, stores and records one image for a store. */
